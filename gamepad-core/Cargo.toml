@@ -1,0 +1,18 @@
+[package]
+name = "gamepad-core"
+version = "0.1.0"
+edition = "2021"
+description = "Platform-agnostic gamepad types and protocol parsing"
+
+[lib]
+name = "gamepad_core"
+path = "src/lib.rs"
+
+[features]
+default = []
+std = []           # Enable std for host testing
+defmt = ["dep:defmt"]  # Optional defmt support for embedded logging
+
+[dependencies]
+# Optional defmt for embedded logging (not used in host tests)
+defmt = { version = "1", optional = true }

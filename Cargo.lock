@@ -687,6 +687,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e575fab7d1e0dcb8d0c7bcf9a63ee213816ab51902e6d244a95819acacf1d4f7"
 
 [[package]]
+name = "gamepad-core"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+]
+
+[[package]]
 name = "generator"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1579,6 +1586,7 @@ dependencies = [
  "embedded-hal-async",
  "fixed",
  "fixed-macro",
+ "gamepad-core",
  "heapless 0.9.2",
  "log",
  "panic-probe",

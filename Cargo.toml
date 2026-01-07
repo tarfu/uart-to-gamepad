@@ -1,88 +1,21 @@
-[package]
-name = "uart-to-gamepad"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
+members = [
+    "gamepad-core",
+    "firmware",
+]
 
-[[bin]]
-name = "uart-to-gamepad"
-path = "src/bin/main.rs"
-
-[lib]
-name = "uart_to_gamepad"
-path = "src/lib.rs"
-
-[features]
-default = ["dev-panic", "standard-hid"]
-dev-panic = []          # Use panic-probe for development
-prod-panic = []         # Use panic-reset for production
-standard-hid = []       # Standard HID gamepad (cross-platform)
-xinput-compat = []      # Xbox-style controller (better Windows game support)
-uart-flow-control = []  # Enable CTS/RTS on GPIO 10/11
-std = []                # Enable std for testing on host
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-# Default target for IDEs
-[package.metadata]
-default-target = "thumbv6m-none-eabi"
-
-[dependencies]
-embassy-embedded-hal = { version = "0.5.0", features = ["defmt"] }
-embassy-sync = { version = "0.7.2", features = ["defmt"] }
-embassy-executor = { version = "0.9.1", features = [
-    "arch-cortex-m",
-    "executor-thread",
-    "executor-interrupt",
-    "defmt",
-] }
-embassy-time = { version = "0.5.0", features = [
-    "defmt",
-    "defmt-timestamp-uptime",
-] }
-embassy-rp = { version = "0.9.0", features = [
-    "defmt",
-    "unstable-pac",
-    "time-driver",
-    "critical-section-impl",
-    "rp2040",
-] }
-embassy-usb = { version = "0.5.1", features = ["defmt"] }
-embassy-futures = { version = "0.1.2" }
-static_cell = "2.1"
-portable-atomic = { version = "1.13", features = ["critical-section"] }
-#critical-section = "1.2"
-
-defmt = "1"
-defmt-rtt = "1"
-
-cortex-m = { version = "0.7.7", features = [
-    "inline-asm",
-] }
-cortex-m-rt = "0.7"
-panic-probe = { version = "1", features = ["print-defmt"] }
-panic-reset = "0.1.1"
-
-heapless = "0.9"
-usbd-hid = "0.9"
-
-embedded-hal = "1.0.0"
-embedded-hal-async = "1.0.0"
-log = "0.4.29"
-
-fixed = "1.29"
-fixed-macro = "1.2"
-
+# Shared patch configuration for embassy git dependencies
 [patch.crates-io]
 embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
 embassy-executor = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
 embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
 embassy-rp = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
-# embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
 embassy-usb = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
-#ssd1306-async = { git = "https://github.com/tarfu/ssd1306-async", branch = "bump-embassy" }
 
+# Workspace-wide profile settings
 [profile.release]
 lto = true
 opt-level = "s"
@@ -94,14 +27,9 @@ debug = true
 # Production profile - optimized for size and without debug info
 [profile.production]
 inherits = "release"
-opt-level = "z"      # Optimize for size
-strip = true         # Strip symbols
-lto = "fat"          # Enable full LTO
+opt-level = "z"
+strip = true
+lto = "fat"
 codegen-units = 1
-panic = "abort"      # Use panic abort
-debug = false        # No debug info in production
-
-# Build the production version with:
-# cargo build --profile production --no-default-features --features prod-panic
-# or for regular development:
-# cargo build
+panic = "abort"
+debug = false
