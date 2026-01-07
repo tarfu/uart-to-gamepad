@@ -70,9 +70,9 @@ impl<'d> UartInputSource<'d> {
     /// discarded to prevent cascading parse errors on subsequent reads.
     async fn read_line(&mut self) -> Result<(), InputError> {
         self.buffer.clear();
+        let mut byte = [0u8; 1];
 
         loop {
-            let mut byte = [0u8; 1];
             self.rx
                 .read(&mut byte)
                 .await

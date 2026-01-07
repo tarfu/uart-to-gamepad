@@ -109,6 +109,34 @@ impl FullStateBuilder {
         self
     }
 
+    /// Set the left stick X position.
+    #[must_use]
+    pub fn left_stick_x(mut self, value: i16) -> Self {
+        self.state.left_stick.x = value;
+        self
+    }
+
+    /// Set the left stick Y position.
+    #[must_use]
+    pub fn left_stick_y(mut self, value: i16) -> Self {
+        self.state.left_stick.y = value;
+        self
+    }
+
+    /// Set the right stick X position.
+    #[must_use]
+    pub fn right_stick_x(mut self, value: i16) -> Self {
+        self.state.right_stick.x = value;
+        self
+    }
+
+    /// Set the right stick Y position.
+    #[must_use]
+    pub fn right_stick_y(mut self, value: i16) -> Self {
+        self.state.right_stick.y = value;
+        self
+    }
+
     /// Set the left trigger value.
     #[must_use]
     pub fn left_trigger(mut self, value: u8) -> Self {

@@ -265,9 +265,15 @@ impl OutputSink for UsbHidOutput<'_> {
     }
 }
 
-/// HID request handler (handles `SET_REPORT`, etc.).
+/// HID request handler for gamepad output reports.
 ///
-/// Currently a no-op handler since we don't handle output reports.
+/// This handler accepts all HID requests but doesn't process them because:
+/// - **Input-only device**: We only send input reports (device → host), not output reports
+/// - **No rumble/LED support**: Gamepads often receive output reports for rumble motors
+///   or LED indicators, but this bridge doesn't have such hardware
+/// - **Idle rate**: The idle rate settings are not applicable for a polled input device
+///
+/// All requests are accepted silently to maintain USB compliance without side effects.
 pub struct GamepadRequestHandler;
 
 impl RequestHandler for GamepadRequestHandler {

@@ -94,6 +94,18 @@ pub enum BridgeError {
     Output(OutputError),
 }
 
+impl From<InputError> for BridgeError {
+    fn from(err: InputError) -> Self {
+        BridgeError::Input(err)
+    }
+}
+
+impl From<OutputError> for BridgeError {
+    fn from(err: OutputError) -> Self {
+        BridgeError::Output(err)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate std;

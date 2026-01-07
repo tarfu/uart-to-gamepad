@@ -112,7 +112,7 @@
 extern crate std;
 
 pub mod builder;
-mod format;
+mod fmt;
 pub mod parser;
 pub mod serialize;
 pub mod types;

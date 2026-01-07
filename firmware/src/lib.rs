@@ -50,6 +50,10 @@
 
 #![no_std]
 
+// Ensure mutually exclusive HID descriptor features
+#[cfg(all(feature = "standard-hid", feature = "xinput-compat"))]
+compile_error!("Cannot enable both `standard-hid` and `xinput-compat` features - they define conflicting HID descriptors");
+
 // Re-export core types for convenience
 pub use gamepad_core::{
     parse, parse_message, AnalogStick, BridgeError, Buttons, GamepadBridge, GamepadFieldUpdate,

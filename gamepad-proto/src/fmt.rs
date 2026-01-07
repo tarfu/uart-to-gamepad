@@ -126,14 +126,6 @@ pub fn write_u8(buf: &mut [u8], value: u8) -> usize {
     len
 }
 
-/// Calculate XOR checksum of the given bytes.
-///
-/// This is the same algorithm used by the parser.
-#[inline]
-pub fn calculate_checksum(data: &[u8]) -> u8 {
-    data.iter().fold(0u8, |acc, &b| acc ^ b)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,24 +208,5 @@ mod tests {
 
         let len = write_u8(&mut buf, 64);
         assert_eq!(&buf[..len], b"64");
-    }
-
-    #[test]
-    fn test_calculate_checksum() {
-        // Empty payload
-        assert_eq!(calculate_checksum(b""), 0);
-
-        // Single byte
-        assert_eq!(calculate_checksum(b"A"), b'A');
-
-        // XOR of all bytes
-        assert_eq!(calculate_checksum(b"AB"), b'A' ^ b'B');
-
-        // Neutral state payload
-        let payload = b"0000:0:0:0:0:0:0";
-        let checksum = calculate_checksum(payload);
-        // Verify by XORing manually
-        let expected = payload.iter().fold(0u8, |acc, &b| acc ^ b);
-        assert_eq!(checksum, expected);
     }
 }

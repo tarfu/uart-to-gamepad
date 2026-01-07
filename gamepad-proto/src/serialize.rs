@@ -30,7 +30,8 @@
 //! assert!(buf[..len].starts_with(b"G0000:0:0:0:0:0:0*"));
 //! ```
 
-use crate::format::{calculate_checksum, write_hex_u16, write_hex_u8, write_i16, write_u8};
+use crate::fmt::{write_hex_u16, write_hex_u8, write_i16, write_u8};
+use crate::parser::calculate_checksum;
 use crate::types::{GamepadFieldUpdate, GamepadState};
 
 /// Maximum size of a serialized full state message.
