@@ -2,7 +2,7 @@
 
 use crate::input::{InputError, InputSource};
 use crate::output::{OutputError, OutputSink};
-use crate::types::GamepadState;
+use gamepad_proto::GamepadState;
 
 /// A bridge that forwards gamepad state from an input source to an output sink.
 ///
@@ -94,10 +94,10 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use crate::types::Buttons;
     use core::future::Future;
     use core::pin::Pin;
     use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+    use gamepad_proto::Buttons;
     use std::sync::{Arc, Mutex};
     use std::vec;
     use std::vec::Vec;

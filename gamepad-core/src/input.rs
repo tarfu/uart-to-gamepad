@@ -1,7 +1,7 @@
 //! Input source trait and error types.
 
-use crate::types::GamepadState;
 use core::future::Future;
+use gamepad_proto::GamepadState;
 
 /// Error type for input operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +19,15 @@ pub enum InputError {
     BufferOverflow,
     /// UART framing error.
     Framing,
+}
+
+impl From<gamepad_proto::ParseError> for InputError {
+    fn from(err: gamepad_proto::ParseError) -> Self {
+        match err {
+            gamepad_proto::ParseError::Parse => InputError::Parse,
+            gamepad_proto::ParseError::Checksum => InputError::Checksum,
+        }
+    }
 }
 
 /// Async trait for gamepad input sources.

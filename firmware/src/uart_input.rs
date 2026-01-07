@@ -19,8 +19,10 @@
 //! - GPIO 10: CTS (optional, with `uart-flow-control` feature)
 //! - GPIO 11: RTS (optional, with `uart-flow-control` feature)
 
-use gamepad_core::{parse_message, GamepadState, InputError, InputSource, ParsedMessage, MAX_LINE_LENGTH};
 use embassy_rp::uart::{Async, Error as UartError, UartRx};
+use gamepad_core::{
+    parse_message, GamepadState, InputError, InputSource, ParsedMessage, MAX_LINE_LENGTH,
+};
 use heapless::Vec;
 
 /// Convert UART errors to InputError.
@@ -72,7 +74,10 @@ impl<'d> UartInputSource<'d> {
 
         loop {
             let mut byte = [0u8; 1];
-            self.rx.read(&mut byte).await.map_err(uart_error_to_input_error)?;
+            self.rx
+                .read(&mut byte)
+                .await
+                .map_err(uart_error_to_input_error)?;
 
             if byte[0] == b'\n' {
                 return Ok(());
@@ -81,7 +86,10 @@ impl<'d> UartInputSource<'d> {
             if self.buffer.push(byte[0]).is_err() {
                 // Buffer overflow - discard rest of line until newline
                 loop {
-                    self.rx.read(&mut byte).await.map_err(uart_error_to_input_error)?;
+                    self.rx
+                        .read(&mut byte)
+                        .await
+                        .map_err(uart_error_to_input_error)?;
                     if byte[0] == b'\n' {
                         break;
                     }

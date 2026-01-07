@@ -1,7 +1,7 @@
 //! Output sink trait and error types.
 
-use crate::types::GamepadState;
 use core::future::Future;
+use gamepad_proto::GamepadState;
 
 /// Error type for output operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

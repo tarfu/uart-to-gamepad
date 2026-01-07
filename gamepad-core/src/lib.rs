@@ -1,4 +1,4 @@
-//! Platform-agnostic gamepad types, protocol parsing, and traits.
+//! Platform-agnostic gamepad types, traits, and bridge logic.
 //!
 //! This crate provides the core abstractions for gamepad handling without
 //! any platform-specific dependencies. It can be used both in embedded
@@ -8,15 +8,17 @@
 //!
 //! The crate is organized into several modules:
 //!
-//! - [`types`]: Core data structures ([`GamepadState`], [`Buttons`], [`AnalogStick`])
-//! - [`parser`]: UART protocol parsing ([`parse`], [`parse_message`])
+//! - **Types** (re-exported from [`gamepad_proto`]): Core data structures
+//!   ([`GamepadState`], [`Buttons`], [`AnalogStick`], [`GamepadFieldUpdate`])
+//! - **Protocol** (re-exported from [`gamepad_proto`]): UART protocol parsing
+//!   and serialization ([`parse`], [`parse_message`], [`Serialize`], [`MessageBuilder`])
 //! - [`input`]: Input source trait ([`InputSource`])
 //! - [`output`]: Output sink trait ([`OutputSink`])
 //! - [`bridge`]: Orchestrates input-to-output flow ([`GamepadBridge`])
 //!
 //! # Protocol
 //!
-//! The parser supports two message types:
+//! The protocol supports two message types:
 //!
 //! **Full State** - Complete gamepad snapshot:
 //! ```text
@@ -49,6 +51,8 @@
 //!
 //! - **`std`**: Enable standard library support (for host testing)
 //! - **`defmt`**: Enable defmt formatting (for embedded logging)
+//! - **`heapless`**: Enable `serialize_to_vec()` methods
+//! - **`embedded-io`**: Enable `serialize_io()` methods for I/O peripherals
 //!
 //! # No-std Support
 //!
@@ -63,12 +67,33 @@ extern crate std;
 pub mod bridge;
 pub mod input;
 pub mod output;
-pub mod parser;
-pub mod types;
 
-// Re-export main types at crate root
+// Re-export all types and functions from gamepad-proto for convenience
+pub use gamepad_proto::{
+    // Parser
+    calculate_checksum,
+    parse,
+    parse_message,
+    // Serialization
+    serialize_full_state,
+    // Types
+    AnalogStick,
+    Buttons,
+    FullStateBuilder,
+    GamepadFieldUpdate,
+    GamepadState,
+    MessageBuilder,
+    ParseError,
+    ParsedMessage,
+    Serialize,
+    SerializeError,
+    UpdateBuilder,
+    MAX_FULL_STATE_SIZE,
+    MAX_LINE_LENGTH,
+    MAX_UPDATE_SIZE,
+};
+
+// Re-export local types
 pub use bridge::{BridgeError, GamepadBridge};
 pub use input::{InputError, InputSource};
 pub use output::{OutputError, OutputSink};
-pub use parser::{parse, parse_message, ParsedMessage, MAX_LINE_LENGTH};
-pub use types::{AnalogStick, Buttons, GamepadFieldUpdate, GamepadState};

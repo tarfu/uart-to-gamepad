@@ -1,10 +1,10 @@
 //! USB HID gamepad output implementation.
 
-use gamepad_core::{GamepadState, OutputError, OutputSink};
 use defmt::Format;
 use embassy_usb::class::hid::{HidWriter, ReportId, RequestHandler, State};
 use embassy_usb::control::OutResponse;
 use embassy_usb::Builder;
+use gamepad_core::{GamepadState, OutputError, OutputSink};
 
 /// USB HID Gamepad report structure.
 ///

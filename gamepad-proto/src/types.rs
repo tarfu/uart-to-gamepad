@@ -10,7 +10,7 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 /// # Example
 ///
 /// ```
-/// use gamepad_core::Buttons;
+/// use gamepad_proto::Buttons;
 ///
 /// let buttons = Buttons::A | Buttons::B;
 /// assert!(buttons.contains(Buttons::A));

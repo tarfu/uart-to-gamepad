@@ -11,9 +11,13 @@ path = "src/lib.rs"
 
 [features]
 default = []
-std = []           # Enable std for host testing
-defmt = ["dep:defmt"]  # Optional defmt support for embedded logging
+std = ["gamepad-proto/std"]           # Enable std for host testing
+defmt = ["gamepad-proto/defmt", "dep:defmt"]  # Optional defmt support for embedded logging
+heapless = ["gamepad-proto/heapless"]  # Enable heapless Vec serialization
+embedded-io = ["gamepad-proto/embedded-io"]  # Enable embedded-io Write serialization
 
 [dependencies]
+# Protocol types, parsing, and serialization
+gamepad-proto = { path = "../gamepad-proto" }
 # Optional defmt for embedded logging (not used in host tests)
 defmt = { version = "1", optional = true }

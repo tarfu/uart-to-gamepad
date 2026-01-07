@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "gamepad-proto",
     "gamepad-core",
     "firmware",
 ]

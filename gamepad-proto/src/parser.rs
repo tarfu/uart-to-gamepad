@@ -4,7 +4,6 @@
 //! - Full state (G prefix): `G<buttons>:<lx>:<ly>:<rx>:<ry>:<lt>:<rt>*<checksum>\n`
 //! - Update (U prefix): `U<field>:<value>*<checksum>\n`
 
-use crate::input::InputError;
 use crate::types::{AnalogStick, Buttons, GamepadFieldUpdate, GamepadState};
 
 /// Maximum line length for the protocol (including newline).
@@ -15,6 +14,16 @@ const MIN_FULL_STATE_LEN: usize = 20;
 
 /// Minimum valid update message length: UB:0*XX = 7 chars
 const MIN_UPDATE_LEN: usize = 7;
+
+/// Error type for parsing protocol messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ParseError {
+    /// Invalid message format or content
+    Parse,
+    /// Checksum verification failed
+    Checksum,
+}
 
 /// Parsed message - either a full gamepad state or an incremental update.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,15 +59,15 @@ pub enum ParsedMessage {
 ///
 /// This represents: A button pressed, sticks centered, triggers at 0.
 #[inline]
-pub fn parse(line: &[u8]) -> Result<GamepadState, InputError> {
+pub fn parse(line: &[u8]) -> Result<GamepadState, ParseError> {
     parse_full_state(strip_line_ending(line))
 }
 
 /// Internal parser for full gamepad state (assumes line endings already stripped).
-fn parse_full_state(line: &[u8]) -> Result<GamepadState, InputError> {
+fn parse_full_state(line: &[u8]) -> Result<GamepadState, ParseError> {
     // Must start with 'G'
     if line.first() != Some(&b'G') {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     // Extract and verify checksum
@@ -67,17 +76,17 @@ fn parse_full_state(line: &[u8]) -> Result<GamepadState, InputError> {
     // Parse payload: buttons:lx:ly:rx:ry:lt:rt
     let mut parts = payload.split(|&b| b == b':');
 
-    let buttons_str = parts.next().ok_or(InputError::Parse)?;
-    let lx_str = parts.next().ok_or(InputError::Parse)?;
-    let ly_str = parts.next().ok_or(InputError::Parse)?;
-    let rx_str = parts.next().ok_or(InputError::Parse)?;
-    let ry_str = parts.next().ok_or(InputError::Parse)?;
-    let lt_str = parts.next().ok_or(InputError::Parse)?;
-    let rt_str = parts.next().ok_or(InputError::Parse)?;
+    let buttons_str = parts.next().ok_or(ParseError::Parse)?;
+    let lx_str = parts.next().ok_or(ParseError::Parse)?;
+    let ly_str = parts.next().ok_or(ParseError::Parse)?;
+    let rx_str = parts.next().ok_or(ParseError::Parse)?;
+    let ry_str = parts.next().ok_or(ParseError::Parse)?;
+    let lt_str = parts.next().ok_or(ParseError::Parse)?;
+    let rt_str = parts.next().ok_or(ParseError::Parse)?;
 
     // Should have no more parts
     if parts.next().is_some() {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     let buttons = parse_hex_u16(buttons_str)?;
@@ -110,17 +119,17 @@ fn parse_full_state(line: &[u8]) -> Result<GamepadState, InputError> {
 /// UB:0001*31\n            -> ParsedMessage::Update(Buttons(...))
 /// ULX:-500*XX\n           -> ParsedMessage::Update(LeftStickX(-500))
 /// ```
-pub fn parse_message(line: &[u8]) -> Result<ParsedMessage, InputError> {
+pub fn parse_message(line: &[u8]) -> Result<ParsedMessage, ParseError> {
     let line = strip_line_ending(line);
 
     if line.is_empty() {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     match line[0] {
         b'G' => parse_full_state(line).map(ParsedMessage::FullState),
         b'U' => parse_update(line).map(ParsedMessage::Update),
-        _ => Err(InputError::Parse),
+        _ => Err(ParseError::Parse),
     }
 }
 
@@ -140,10 +149,10 @@ pub fn parse_message(line: &[u8]) -> Result<ParsedMessage, InputError> {
 /// - `RY` - Right stick Y (signed i16)
 /// - `LT` - Left trigger (unsigned u8)
 /// - `RT` - Right trigger (unsigned u8)
-fn parse_update(line: &[u8]) -> Result<GamepadFieldUpdate, InputError> {
+fn parse_update(line: &[u8]) -> Result<GamepadFieldUpdate, ParseError> {
     // Must start with 'U'
     if line.first() != Some(&b'U') {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     // Extract and verify checksum
@@ -153,7 +162,7 @@ fn parse_update(line: &[u8]) -> Result<GamepadFieldUpdate, InputError> {
     let colon_pos = payload
         .iter()
         .position(|&b| b == b':')
-        .ok_or(InputError::Parse)?;
+        .ok_or(ParseError::Parse)?;
 
     let field = &payload[..colon_pos];
     let value = &payload[colon_pos + 1..];
@@ -167,13 +176,13 @@ fn parse_update(line: &[u8]) -> Result<GamepadFieldUpdate, InputError> {
         b"RY" => GamepadFieldUpdate::RightStickY(parse_i16(value)?),
         b"LT" => GamepadFieldUpdate::LeftTrigger(parse_u8(value)?),
         b"RT" => GamepadFieldUpdate::RightTrigger(parse_u8(value)?),
-        _ => return Err(InputError::Parse),
+        _ => return Err(ParseError::Parse),
     })
 }
 
 /// Calculate XOR checksum of the payload bytes.
 #[inline]
-fn calculate_checksum(data: &[u8]) -> u8 {
+pub fn calculate_checksum(data: &[u8]) -> u8 {
     data.iter().fold(0u8, |acc, &b| acc ^ b)
 }
 
@@ -195,18 +204,18 @@ fn strip_line_ending(line: &[u8]) -> &[u8] {
 /// The `min_len` parameter is the minimum valid message length.
 /// The input line should have line endings already stripped.
 #[inline]
-fn extract_verified_payload(line: &[u8], min_len: usize) -> Result<&[u8], InputError> {
+fn extract_verified_payload(line: &[u8], min_len: usize) -> Result<&[u8], ParseError> {
     if line.len() < min_len {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     let checksum_pos = line
         .iter()
         .rposition(|&b| b == b'*')
-        .ok_or(InputError::Parse)?;
+        .ok_or(ParseError::Parse)?;
 
     if checksum_pos + 3 > line.len() {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     let payload = &line[1..checksum_pos];
@@ -215,7 +224,7 @@ fn extract_verified_payload(line: &[u8], min_len: usize) -> Result<&[u8], InputE
     let received_checksum = parse_hex_u8(checksum_str)?;
 
     if expected_checksum != received_checksum {
-        return Err(InputError::Checksum);
+        return Err(ParseError::Checksum);
     }
 
     Ok(payload)
@@ -223,9 +232,9 @@ fn extract_verified_payload(line: &[u8], min_len: usize) -> Result<&[u8], InputE
 
 /// Parse a 4-character hex string as u16.
 #[inline]
-fn parse_hex_u16(s: &[u8]) -> Result<u16, InputError> {
+fn parse_hex_u16(s: &[u8]) -> Result<u16, ParseError> {
     if s.len() != 4 {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
     let mut value: u16 = 0;
     for &b in s {
@@ -238,9 +247,9 @@ fn parse_hex_u16(s: &[u8]) -> Result<u16, InputError> {
 
 /// Parse a 2-character hex string as u8.
 #[inline]
-fn parse_hex_u8(s: &[u8]) -> Result<u8, InputError> {
+fn parse_hex_u8(s: &[u8]) -> Result<u8, ParseError> {
     if s.len() != 2 {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
     let high = hex_digit(s[0])?;
     let low = hex_digit(s[1])?;
@@ -249,21 +258,21 @@ fn parse_hex_u8(s: &[u8]) -> Result<u8, InputError> {
 
 /// Convert a hex character to its value.
 #[inline]
-fn hex_digit(b: u8) -> Result<u8, InputError> {
+fn hex_digit(b: u8) -> Result<u8, ParseError> {
     match b {
         b'0'..=b'9' => Ok(b - b'0'),
         b'A'..=b'F' => Ok(b - b'A' + 10),
         b'a'..=b'f' => Ok(b - b'a' + 10),
-        _ => Err(InputError::Parse),
+        _ => Err(ParseError::Parse),
     }
 }
 
 /// Parse a decimal string as i16 (with optional leading whitespace and sign).
 #[inline]
-fn parse_i16(s: &[u8]) -> Result<i16, InputError> {
+fn parse_i16(s: &[u8]) -> Result<i16, ParseError> {
     let s = trim_leading_whitespace(s);
     if s.is_empty() {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     let (negative, s) = if s[0] == b'-' {
@@ -275,18 +284,18 @@ fn parse_i16(s: &[u8]) -> Result<i16, InputError> {
     };
 
     if s.is_empty() {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     let mut value: i32 = 0;
     for &b in s {
         if !b.is_ascii_digit() {
-            return Err(InputError::Parse);
+            return Err(ParseError::Parse);
         }
         value = value
             .checked_mul(10)
             .and_then(|v| v.checked_add((b - b'0') as i32))
-            .ok_or(InputError::Parse)?;
+            .ok_or(ParseError::Parse)?;
     }
 
     if negative {
@@ -294,7 +303,7 @@ fn parse_i16(s: &[u8]) -> Result<i16, InputError> {
     }
 
     if value < i16::MIN as i32 || value > i16::MAX as i32 {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     Ok(value as i16)
@@ -302,25 +311,25 @@ fn parse_i16(s: &[u8]) -> Result<i16, InputError> {
 
 /// Parse a decimal string as u8 (with optional leading whitespace).
 #[inline]
-fn parse_u8(s: &[u8]) -> Result<u8, InputError> {
+fn parse_u8(s: &[u8]) -> Result<u8, ParseError> {
     let s = trim_leading_whitespace(s);
     if s.is_empty() {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     let mut value: u16 = 0;
     for &b in s {
         if !b.is_ascii_digit() {
-            return Err(InputError::Parse);
+            return Err(ParseError::Parse);
         }
         value = value
             .checked_mul(10)
             .and_then(|v| v.checked_add((b - b'0') as u16))
-            .ok_or(InputError::Parse)?;
+            .ok_or(ParseError::Parse)?;
     }
 
     if value > u8::MAX as u16 {
-        return Err(InputError::Parse);
+        return Err(ParseError::Parse);
     }
 
     Ok(value as u8)
@@ -376,13 +385,13 @@ mod tests {
     fn test_checksum_mismatch() {
         // Use *FF which is definitely wrong (correct checksum for this payload is 00)
         let line = b"G0000:0:0:0:0:0:0*FF\n";
-        assert_eq!(parse(line), Err(InputError::Checksum));
+        assert_eq!(parse(line), Err(ParseError::Checksum));
     }
 
     #[test]
     fn test_invalid_prefix() {
         let line = b"X0000:0:0:0:0:0:0*30\n";
-        assert_eq!(parse(line), Err(InputError::Parse));
+        assert_eq!(parse(line), Err(ParseError::Parse));
     }
 
     // --- Update message tests ---
@@ -474,7 +483,7 @@ mod tests {
     #[test]
     fn test_parse_update_checksum_mismatch() {
         let line = b"UB:0001*00\n";
-        assert_eq!(parse_message(line), Err(InputError::Checksum));
+        assert_eq!(parse_message(line), Err(ParseError::Checksum));
     }
 
     #[test]
@@ -482,7 +491,7 @@ mod tests {
         let payload = b"XX:100";
         let checksum = calculate_checksum(payload);
         let line = format!("UXX:100*{:02X}\n", checksum);
-        assert_eq!(parse_message(line.as_bytes()), Err(InputError::Parse));
+        assert_eq!(parse_message(line.as_bytes()), Err(ParseError::Parse));
     }
 
     #[test]
@@ -518,9 +527,9 @@ mod tests {
 
     #[test]
     fn test_parse_message_empty() {
-        assert_eq!(parse_message(b""), Err(InputError::Parse));
-        assert_eq!(parse_message(b"\n"), Err(InputError::Parse));
-        assert_eq!(parse_message(b"\r\n"), Err(InputError::Parse));
+        assert_eq!(parse_message(b""), Err(ParseError::Parse));
+        assert_eq!(parse_message(b"\n"), Err(ParseError::Parse));
+        assert_eq!(parse_message(b"\r\n"), Err(ParseError::Parse));
     }
 
     #[test]
@@ -552,7 +561,7 @@ mod tests {
         let payload = b"LX:32768";
         let checksum = calculate_checksum(payload);
         let line = format!("ULX:32768*{:02X}\n", checksum);
-        assert_eq!(parse_message(line.as_bytes()), Err(InputError::Parse));
+        assert_eq!(parse_message(line.as_bytes()), Err(ParseError::Parse));
     }
 
     #[test]
@@ -560,7 +569,7 @@ mod tests {
         let payload = b"LX:-32769";
         let checksum = calculate_checksum(payload);
         let line = format!("ULX:-32769*{:02X}\n", checksum);
-        assert_eq!(parse_message(line.as_bytes()), Err(InputError::Parse));
+        assert_eq!(parse_message(line.as_bytes()), Err(ParseError::Parse));
     }
 
     #[test]
@@ -579,7 +588,7 @@ mod tests {
         let payload = b"0000:0:0:0:0:0:0:99";
         let checksum = calculate_checksum(payload);
         let line = format!("G0000:0:0:0:0:0:0:99*{:02X}\n", checksum);
-        assert_eq!(parse(line.as_bytes()), Err(InputError::Parse));
+        assert_eq!(parse(line.as_bytes()), Err(ParseError::Parse));
     }
 
     #[test]
@@ -588,6 +597,6 @@ mod tests {
         let payload = b"0000:0:0:0:0:0";
         let checksum = calculate_checksum(payload);
         let line = format!("G0000:0:0:0:0:0*{:02X}\n", checksum);
-        assert_eq!(parse(line.as_bytes()), Err(InputError::Parse));
+        assert_eq!(parse(line.as_bytes()), Err(ParseError::Parse));
     }
 }

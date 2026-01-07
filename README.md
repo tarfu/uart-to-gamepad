@@ -11,6 +11,7 @@ A USB HID gamepad bridge for the Raspberry Pi Pico (RP2040) that receives gamepa
 - **Analog Triggers**: Left and right triggers with 8-bit precision
 - **Incremental Updates**: Efficient protocol supports both full state and delta updates
 - **XOR Checksum**: Error detection on all messages
+- **Client Library**: `gamepad-proto` crate for sending data to the bridge from any Rust application
 
 ## Hardware Requirements
 
@@ -86,17 +87,23 @@ probe-rs run --chip RP2040 target/thumbv6m-none-eabi/release/uart-to-gamepad
 
 ## Testing
 
-The project is structured as a Cargo workspace to enable fast host-based testing:
+The project is structured as a Cargo workspace to enable fast host-based testing.
+
+> **Note:** The workspace default target is `thumbv6m-none-eabi` for embedded builds.
+> Tests must be run with a host target (e.g., `x86_64-unknown-linux-gnu` or `aarch64-apple-darwin`).
 
 ```bash
-# Run all unit tests on host (~0.5s)
-cargo test -p gamepad-core
+# Run all library tests on host (Linux x86_64)
+cargo test -p gamepad-proto -p gamepad-core --target x86_64-unknown-linux-gnu
+
+# Run all library tests on host (macOS ARM)
+cargo test -p gamepad-proto -p gamepad-core --target aarch64-apple-darwin
 
 # Run with verbose output
-cargo test -p gamepad-core -- --nocapture
+cargo test -p gamepad-proto --target x86_64-unknown-linux-gnu -- --nocapture
 
 # Run specific test
-cargo test -p gamepad-core parser::tests::test_parse_neutral
+cargo test -p gamepad-proto --target x86_64-unknown-linux-gnu parser::tests::test_parse_neutral
 ```
 
 ## Protocol Specification
@@ -201,12 +208,19 @@ uart-to-gamepad/
 ├── LICENSE                 # MIT License
 ├── README.md               # This file
 │
-├── gamepad-core/           # Platform-agnostic library
+├── gamepad-proto/          # Protocol library (for clients sending data)
 │   ├── Cargo.toml
 │   └── src/
-│       ├── lib.rs          # Crate root, re-exports
+│       ├── lib.rs          # Public API, re-exports
 │       ├── types.rs        # Buttons, AnalogStick, GamepadState
-│       ├── parser.rs       # Protocol parser with tests
+│       ├── parser.rs       # Protocol parser
+│       ├── serialize.rs    # Serialize trait
+│       └── builder.rs      # MessageBuilder fluent API
+│
+├── gamepad-core/           # High-level abstractions (traits, bridge)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs          # Re-exports gamepad-proto + local modules
 │       ├── input.rs        # InputSource trait
 │       ├── output.rs       # OutputSink trait
 │       └── bridge.rs       # GamepadBridge orchestrator
@@ -222,7 +236,25 @@ uart-to-gamepad/
         └── usb_output.rs   # USB HID implementation
 ```
 
-## Features Flags
+## Feature Flags
+
+### gamepad-proto
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `std` | No | Enable standard library support |
+| `defmt` | No | Enable defmt formatting (for embedded logging) |
+| `heapless` | No | Enable `serialize_to_vec()` for `heapless::Vec` output |
+| `embedded-io` | No | Enable `serialize_io()` for `embedded_io::Write` targets |
+
+### gamepad-core
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `std` | No | Enable standard library (for host testing) |
+| `defmt` | No | Enable defmt formatting (for embedded logging) |
+| `heapless` | No | Enable heapless Vec serialization (passes to gamepad-proto) |
+| `embedded-io` | No | Enable embedded-io Write serialization (passes to gamepad-proto) |
 
 ### firmware (uart-to-gamepad)
 
@@ -234,23 +266,37 @@ uart-to-gamepad/
 | `xinput-compat` | No | Xbox-style descriptor (better Windows game support) |
 | `uart-flow-control` | No | Enable CTS/RTS flow control on GPIO 10/11 |
 
-### gamepad-core
-
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `std` | No | Enable standard library (for host testing) |
-| `defmt` | No | Enable defmt formatting (for embedded logging) |
-
 ## Architecture
 
+**Crate Dependencies:**
+```
+gamepad-proto          # Protocol types, parsing, serialization
+       │
+       ▼
+gamepad-core           # Traits (InputSource, OutputSink), GamepadBridge
+       │
+       ▼
+uart-to-gamepad        # RP2040 firmware (UART input, USB HID output)
+```
+
+**System Overview:**
 ```
 ┌─────────────────┐     UART      ┌─────────────────┐     USB HID     ┌──────────────┐
 │  Input Source   │──────────────▶│   RP2040 Pico   │────────────────▶│  Host PC     │
 │  (MCU, PC, etc) │   115200 8N1  │  uart-to-gamepad│   Gamepad HID   │  (Games, OS) │
 └─────────────────┘               └─────────────────┘                 └──────────────┘
+        │                                                                     │
+        │ uses gamepad-proto                                                  │
+        │ to serialize messages                                               │
+        ▼                                                                     ▼
+   ┌──────────┐                                                        ┌──────────┐
+   │  Buttons │                                                        │  Games   │
+   │  Sticks  │                                                        │  Input   │
+   │ Triggers │                                                        │  APIs    │
+   └──────────┘                                                        └──────────┘
 ```
 
-**Internal Flow:**
+**Internal Firmware Flow:**
 ```
 UART RX ──▶ UartInputSource ──▶ Signal ──▶ UsbHidOutput ──▶ USB HID
               (parse protocol)   (latest    (format report)
@@ -262,6 +308,68 @@ The firmware uses Embassy async runtime with three concurrent tasks:
 2. **Input Task**: Reads UART, parses messages, signals latest state
 3. **Output Task**: Waits for state signals, sends USB HID reports
 
+## Client Usage (gamepad-proto)
+
+Use the `gamepad-proto` crate to send gamepad data to the bridge from any Rust application:
+
+```toml
+[dependencies]
+gamepad-proto = { path = "path/to/uart-to-gamepad/gamepad-proto" }
+```
+
+### Serializing Full State
+
+```rust
+use gamepad_proto::{GamepadState, Buttons, Serialize};
+
+let state = GamepadState {
+    buttons: Buttons::A | Buttons::B,
+    left_stick: gamepad_proto::AnalogStick { x: 1000, y: -500 },
+    ..GamepadState::neutral()
+};
+
+let mut buf = [0u8; 64];
+let len = state.serialize(&mut buf).unwrap();
+// buf[..len] contains: b"G0003:1000:-500:0:0:0:0*XX\n"
+
+// Send buf[..len] over UART to the bridge
+uart.write_all(&buf[..len]).unwrap();
+```
+
+### Using the Builder API
+
+```rust
+use gamepad_proto::{MessageBuilder, Buttons};
+
+let mut buf = [0u8; 64];
+
+// Build a full state message
+let len = MessageBuilder::full_state()
+    .buttons(Buttons::X | Buttons::Y)
+    .left_stick(1000, -500)
+    .triggers(128, 64)
+    .serialize(&mut buf)
+    .unwrap();
+
+// Build an incremental update (more efficient for single changes)
+let len = MessageBuilder::update()
+    .buttons(Buttons::A)
+    .serialize(&mut buf)
+    .unwrap();
+```
+
+### Serializing Updates
+
+```rust
+use gamepad_proto::{GamepadFieldUpdate, Buttons, Serialize};
+
+// Send only the changed field
+let update = GamepadFieldUpdate::LeftTrigger(255);
+let mut buf = [0u8; 32];
+let len = update.serialize(&mut buf).unwrap();
+// buf[..len] contains: b"ULT:255*XX\n"
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -271,6 +379,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 Contributions are welcome! Please feel free to submit issues and pull requests.
 
 When contributing code:
-1. Run `cargo test -p gamepad-core` to ensure tests pass
+1. Run `cargo test -p gamepad-proto -p gamepad-core --target x86_64-unknown-linux-gnu` to ensure tests pass
 2. Run `cargo clippy -p uart-to-gamepad` for lint checks
 3. Run `cargo build -p uart-to-gamepad --release` to verify embedded build

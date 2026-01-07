@@ -14,7 +14,9 @@ use embassy_sync::signal::Signal;
 use embassy_usb::class::hid::State;
 use embassy_usb::{Builder, Config as UsbConfig};
 use static_cell::StaticCell;
-use uart_to_gamepad::{configure_usb_hid, GamepadState, InputSource, OutputSink, UartInputSource, UsbHidOutput};
+use uart_to_gamepad::{
+    configure_usb_hid, GamepadState, InputSource, OutputSink, UartInputSource, UsbHidOutput,
+};
 
 #[cfg(feature = "dev-panic")]
 use panic_probe as _;
