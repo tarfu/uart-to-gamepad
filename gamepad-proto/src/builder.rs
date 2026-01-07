@@ -157,6 +157,10 @@ impl FullStateBuilder {
     }
 
     /// Serialize to a `core::fmt::Write` implementation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SerializeError::WriteError`] if the write fails.
     pub fn serialize_fmt<W: core::fmt::Write>(self, writer: &mut W) -> Result<(), SerializeError> {
         use crate::serialize::Serialize;
         self.state.serialize_fmt(writer)
@@ -270,6 +274,11 @@ impl UpdateBuilder {
     }
 
     /// Serialize to a `core::fmt::Write` implementation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SerializeError::BufferTooSmall`] if no field was set.
+    /// Returns [`SerializeError::WriteError`] if the write fails.
     pub fn serialize_fmt<W: core::fmt::Write>(self, writer: &mut W) -> Result<(), SerializeError> {
         use crate::serialize::Serialize;
         self.update
@@ -296,6 +305,12 @@ impl Default for UpdateBuilder {
 /// Convenience function to quickly serialize a full state to a buffer.
 ///
 /// This is equivalent to `MessageBuilder::full_state()` with all the given values.
+///
+/// # Example
+///
+/// # Errors
+///
+/// Returns [`SerializeError::BufferTooSmall`] if the buffer is too small.
 ///
 /// # Example
 ///

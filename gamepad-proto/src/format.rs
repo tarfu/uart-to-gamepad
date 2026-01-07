@@ -64,9 +64,9 @@ pub fn write_i16(buf: &mut [u8], value: i16) -> usize {
             buf[1..6].copy_from_slice(b"32768");
             return 6;
         }
-        ((-value) as u16, true)
+        ((-value).unsigned_abs(), true)
     } else {
-        (value as u16, false)
+        (value.unsigned_abs(), false)
     };
 
     // Write digits in reverse order to temporary buffer

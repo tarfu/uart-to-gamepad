@@ -1,4 +1,4 @@
-//! GamepadBridge: connects input sources to output sinks.
+//! `GamepadBridge`: connects input sources to output sinks.
 
 use crate::input::{InputError, InputSource};
 use crate::output::{OutputError, OutputSink};
@@ -36,6 +36,11 @@ impl<I: InputSource, O: OutputSink> GamepadBridge<I, O> {
     /// Process a single input and forward it to the output.
     ///
     /// Returns the result of the operation for testing purposes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BridgeError::Input`] if reading from the input source fails.
+    /// Returns [`BridgeError::Output`] if writing to the output sink fails.
     pub async fn process_one(&mut self) -> Result<(), BridgeError> {
         match self.input.receive().await {
             Ok(state) => {

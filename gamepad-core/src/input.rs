@@ -33,7 +33,7 @@ impl From<gamepad_proto::ParseError> for InputError {
 /// Async trait for gamepad input sources.
 ///
 /// This trait abstracts the source of gamepad data, allowing different
-/// implementations (UART, WiFi, BLE, I2C, SPI) to be used interchangeably.
+/// implementations (UART, Wi-Fi, BLE, I2C, SPI) to be used interchangeably.
 ///
 /// # `no_std` Compatibility
 ///

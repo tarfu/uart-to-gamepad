@@ -1,4 +1,4 @@
-//! Core gamepad types: Buttons, AnalogStick, GamepadState, GamepadFieldUpdate.
+//! Core gamepad types: `Buttons`, `AnalogStick`, `GamepadState`, `GamepadFieldUpdate`.
 
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 

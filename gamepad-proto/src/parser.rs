@@ -35,7 +35,7 @@ pub enum ParsedMessage {
     Update(GamepadFieldUpdate),
 }
 
-/// Parse a complete line into a GamepadState.
+/// Parse a complete line into a [`GamepadState`].
 ///
 /// # Protocol Format
 ///
@@ -49,7 +49,12 @@ pub enum ParsedMessage {
 /// - `rx,ry` - Right stick X/Y as signed decimal i16
 /// - `lt,rt` - Triggers as unsigned decimal u8 (0-255)
 /// - `checksum` - 2 hex digits (XOR of bytes between G and *)
-/// - `\n` - Line terminator (CR ignored if present)
+/// - `\\n` - Line terminator (CR ignored if present)
+///
+/// # Errors
+///
+/// Returns [`ParseError::Parse`] if the message format is invalid.
+/// Returns [`ParseError::Checksum`] if the checksum verification fails.
 ///
 /// # Example
 ///
@@ -64,6 +69,7 @@ pub fn parse(line: &[u8]) -> Result<GamepadState, ParseError> {
 }
 
 /// Internal parser for full gamepad state (assumes line endings already stripped).
+#[allow(clippy::similar_names)] // lx/ly/rx/ry/lt/rt are intentionally similar (protocol fields)
 fn parse_full_state(line: &[u8]) -> Result<GamepadState, ParseError> {
     // Must start with 'G'
     if line.first() != Some(&b'G') {
@@ -112,12 +118,17 @@ fn parse_full_state(line: &[u8]) -> Result<GamepadState, ParseError> {
 /// - `G` - Full gamepad state
 /// - `U` - Single field update
 ///
+/// # Errors
+///
+/// Returns [`ParseError::Parse`] if the message format is invalid or the prefix is unknown.
+/// Returns [`ParseError::Checksum`] if the checksum verification fails.
+///
 /// # Example
 ///
 /// ```text
-/// G0001:0:0:0:0:0:0*31\n  -> ParsedMessage::FullState(...)
-/// UB:0001*31\n            -> ParsedMessage::Update(Buttons(...))
-/// ULX:-500*XX\n           -> ParsedMessage::Update(LeftStickX(-500))
+/// G0001:0:0:0:0:0:0*31\\n  -> ParsedMessage::FullState(...)
+/// UB:0001*31\\n            -> ParsedMessage::Update(Buttons(...))
+/// ULX:-500*XX\\n           -> ParsedMessage::Update(LeftStickX(-500))
 /// ```
 pub fn parse_message(line: &[u8]) -> Result<ParsedMessage, ParseError> {
     let line = strip_line_ending(line);
@@ -182,6 +193,7 @@ fn parse_update(line: &[u8]) -> Result<GamepadFieldUpdate, ParseError> {
 
 /// Calculate XOR checksum of the payload bytes.
 #[inline]
+#[must_use]
 pub fn calculate_checksum(data: &[u8]) -> u8 {
     data.iter().fold(0u8, |acc, &b| acc ^ b)
 }
@@ -240,7 +252,7 @@ fn parse_hex_u16(s: &[u8]) -> Result<u16, ParseError> {
     for &b in s {
         let digit = hex_digit(b)?;
         // Shift can never overflow: max 4 iterations shifting by 0, 4, 8, 12
-        value = (value << 4) | digit as u16;
+        value = (value << 4) | u16::from(digit);
     }
     Ok(value)
 }
@@ -294,7 +306,7 @@ fn parse_i16(s: &[u8]) -> Result<i16, ParseError> {
         }
         value = value
             .checked_mul(10)
-            .and_then(|v| v.checked_add((b - b'0') as i32))
+            .and_then(|v| v.checked_add(i32::from(b - b'0')))
             .ok_or(ParseError::Parse)?;
     }
 
@@ -302,10 +314,12 @@ fn parse_i16(s: &[u8]) -> Result<i16, ParseError> {
         value = -value;
     }
 
-    if value < i16::MIN as i32 || value > i16::MAX as i32 {
+    if value < i32::from(i16::MIN) || value > i32::from(i16::MAX) {
         return Err(ParseError::Parse);
     }
 
+    // SAFETY: Range check above guarantees value fits in i16
+    #[allow(clippy::cast_possible_truncation)]
     Ok(value as i16)
 }
 
@@ -324,14 +338,16 @@ fn parse_u8(s: &[u8]) -> Result<u8, ParseError> {
         }
         value = value
             .checked_mul(10)
-            .and_then(|v| v.checked_add((b - b'0') as u16))
+            .and_then(|v| v.checked_add(u16::from(b - b'0')))
             .ok_or(ParseError::Parse)?;
     }
 
-    if value > u8::MAX as u16 {
+    if value > u16::from(u8::MAX) {
         return Err(ParseError::Parse);
     }
 
+    // SAFETY: Range check above guarantees value fits in u8
+    #[allow(clippy::cast_possible_truncation)]
     Ok(value as u8)
 }
 

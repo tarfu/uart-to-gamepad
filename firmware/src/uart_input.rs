@@ -25,7 +25,7 @@ use gamepad_core::{
 };
 use heapless::Vec;
 
-/// Convert UART errors to InputError.
+/// Convert UART errors to [`InputError`].
 ///
 /// This is a helper function instead of a `From` impl to avoid orphan rule issues
 /// (both `UartError` and `InputError` are defined in external crates).
@@ -33,9 +33,7 @@ use heapless::Vec;
 fn uart_error_to_input_error(e: UartError) -> InputError {
     match e {
         UartError::Framing => InputError::Framing,
-        UartError::Break => InputError::Io,
         UartError::Overrun => InputError::BufferOverflow,
-        UartError::Parity => InputError::Io,
         _ => InputError::Io,
     }
 }
@@ -50,6 +48,7 @@ pub struct UartInputSource<'d> {
 
 impl<'d> UartInputSource<'d> {
     /// Create a new UART input source from the given UART receiver.
+    #[must_use]
     pub fn new(rx: UartRx<'d, Async>) -> Self {
         Self {
             rx,
@@ -100,7 +99,7 @@ impl<'d> UartInputSource<'d> {
     }
 }
 
-impl<'d> InputSource for UartInputSource<'d> {
+impl InputSource for UartInputSource<'_> {
     async fn receive(&mut self) -> Result<GamepadState, InputError> {
         self.read_line().await?;
 

@@ -46,14 +46,14 @@ static HID_STATE: StaticCell<State> = StaticCell::new();
 async fn main(spawner: Spawner) {
     info!("UART-to-Gamepad starting...");
 
-    let p = embassy_rp::init(Default::default());
+    let p = embassy_rp::init(embassy_rp::config::Config::default());
 
     // Initialize the gamepad state signal (latest-value semantics)
     let signal = STATE_SIGNAL.init(Signal::new());
 
     // --- UART Setup ---
     let mut uart_config = UartConfig::default();
-    uart_config.baudrate = 115200;
+    uart_config.baudrate = 115_200;
 
     let uart = Uart::new(
         p.UART1,

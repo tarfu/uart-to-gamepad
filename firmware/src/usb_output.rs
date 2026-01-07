@@ -42,10 +42,10 @@ impl GamepadReport {
         [
             buttons_bytes[0],
             buttons_bytes[1],
-            self.left_stick_x as u8,
-            self.left_stick_y as u8,
-            self.right_stick_x as u8,
-            self.right_stick_y as u8,
+            self.left_stick_x.to_ne_bytes()[0],
+            self.left_stick_y.to_ne_bytes()[0],
+            self.right_stick_x.to_ne_bytes()[0],
+            self.right_stick_y.to_ne_bytes()[0],
             self.left_trigger,
             self.right_trigger,
         ]
@@ -234,6 +234,7 @@ pub struct UsbHidOutput<'d> {
 
 impl<'d> UsbHidOutput<'d> {
     /// Create a new USB HID output from the given HID writer.
+    #[must_use]
     pub fn new(
         writer: HidWriter<'d, embassy_rp::usb::Driver<'d, embassy_rp::peripherals::USB>, 8>,
     ) -> Self {
@@ -250,7 +251,7 @@ impl<'d> UsbHidOutput<'d> {
     }
 }
 
-impl<'d> OutputSink for UsbHidOutput<'d> {
+impl OutputSink for UsbHidOutput<'_> {
     async fn send(&mut self, state: &GamepadState) -> Result<(), OutputError> {
         let report = GamepadReport::from(state);
         self.writer
@@ -264,7 +265,7 @@ impl<'d> OutputSink for UsbHidOutput<'d> {
     }
 }
 
-/// HID request handler (handles SET_REPORT, etc.).
+/// HID request handler (handles `SET_REPORT`, etc.).
 ///
 /// Currently a no-op handler since we don't handle output reports.
 pub struct GamepadRequestHandler;
