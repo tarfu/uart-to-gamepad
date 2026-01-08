@@ -44,6 +44,9 @@ cargo install elf2uf2-rs
 
 # Install probe-rs for debugging (optional)
 cargo install probe-rs-tools
+
+# Install just for convenient build recipes (optional)
+cargo install just
 ```
 
 ### Build Commands
@@ -81,6 +84,28 @@ cp uart-to-gamepad.uf2 /Volumes/RPI-RP2/
 ```bash
 probe-rs run --chip RP2040 target/thumbv6m-none-eabi/release/uart-to-gamepad-rp2040
 ```
+
+### Using justfile
+
+A `justfile` is provided for convenient build recipes:
+
+```bash
+just build gamepad              # Release build, gamepad protocol
+just build crsf                 # Release build, CRSF protocol
+just build mavlink              # Release build, MAVLink protocol
+just build gamepad dev          # Dev build with debug info
+just build crsf production      # Production build (optimized, panic-reset)
+just build-all                  # Build all protocols (release)
+just test                       # Run all host tests
+just check                      # Check all variants compile
+just clippy                     # Run lints
+just size gamepad               # Show binary size
+just run crsf                   # Run via probe-rs
+just uf2 mavlink                # Generate UF2 file
+just clean                      # Clean build artifacts
+```
+
+Run `just` or `just --list` to see all available recipes.
 
 ## Testing
 

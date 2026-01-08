@@ -79,6 +79,18 @@ cp firmware.uf2 /Volumes/RPI-RP2/  # macOS
 probe-rs run --chip RP2040 target/thumbv6m-none-eabi/release/uart-to-gamepad-rp2040
 ```
 
+### Using justfile
+
+From the workspace root, use the justfile for convenient builds:
+
+```bash
+just build gamepad              # Release build
+just build crsf dev             # Dev build with CRSF
+just build mavlink production   # Production build
+just run gamepad                # Run via probe-rs
+just uf2 crsf                   # Generate UF2 file
+```
+
 ## Architecture
 
 The firmware uses Embassy async runtime with three concurrent tasks:
