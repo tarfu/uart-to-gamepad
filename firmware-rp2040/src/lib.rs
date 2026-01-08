@@ -60,8 +60,17 @@ pub use gamepad_core::{
     GamepadState, InputError, InputSource, OutputError, OutputSink, ParsedMessage, MAX_LINE_LENGTH,
 };
 
-pub mod uart_input;
+pub mod input;
 pub mod usb_output;
 
-pub use uart_input::UartInputSource;
+// Re-export input sources based on selected protocol
+#[cfg(feature = "proto-gamepad")]
+pub use input::UartInputSource;
+
+#[cfg(feature = "proto-crsf")]
+pub use input::{CrsfBidirectionalSource, CrsfInputSource};
+
+#[cfg(feature = "proto-mavlink")]
+pub use input::MavlinkInputSource;
+
 pub use usb_output::{configure_usb_hid, GamepadReport, GamepadRequestHandler, UsbHidOutput};

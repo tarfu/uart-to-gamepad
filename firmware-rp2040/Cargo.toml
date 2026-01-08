@@ -1,25 +1,30 @@
 [package]
-name = "uart-to-gamepad"
+name = "uart-to-gamepad-rp2040"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "UART to USB Gamepad bridge for RP2040"
 
 [[bin]]
-name = "uart-to-gamepad"
+name = "uart-to-gamepad-rp2040"
 path = "src/bin/main.rs"
 
 [lib]
-name = "uart_to_gamepad"
+name = "uart_to_gamepad_rp2040"
 path = "src/lib.rs"
 
 [features]
-default = ["dev-panic", "standard-hid"]
+default = ["dev-panic", "standard-hid", "proto-gamepad"]
 dev-panic = []          # Use panic-probe for development
 prod-panic = []         # Use panic-reset for production
 standard-hid = []       # Standard HID gamepad (cross-platform)
 xinput-compat = []      # Xbox-style controller (better Windows game support)
 uart-flow-control = []  # Enable CTS/RTS on GPIO 10/11
+
+# Input protocol selection (mutually exclusive)
+proto-gamepad = ["dep:gamepad-proto"] # Default text-based gamepad protocol (115200 baud)
+proto-crsf = ["dep:crsf-proto"]       # CRSF/ExpressLRS protocol (420000 baud)
+proto-mavlink = ["dep:mavlink-proto"] # MAVLink protocol (57600/115200 baud)
 
 # Default target for IDEs
 [package.metadata]
@@ -28,6 +33,11 @@ default-target = "thumbv6m-none-eabi"
 [dependencies]
 # Platform-agnostic core (from workspace)
 gamepad-core = { path = "../gamepad-core", features = ["defmt"] }
+
+# Protocol crates (chip-agnostic, optional)
+gamepad-proto = { path = "../gamepad-proto", features = ["defmt"], optional = true }
+crsf-proto = { path = "../crsf-proto", features = ["defmt"], optional = true }
+mavlink-proto = { path = "../mavlink-proto", features = ["defmt"], optional = true }
 
 # Embassy async runtime
 embassy-embedded-hal = { version = "0.5.0", features = ["defmt"] }

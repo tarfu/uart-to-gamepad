@@ -3,7 +3,9 @@ resolver = "2"
 members = [
     "gamepad-proto",
     "gamepad-core",
-    "firmware",
+    "crsf-proto",
+    "mavlink-proto",
+    "firmware-rp2040",
 ]
 
 # Shared patch configuration for embassy git dependencies

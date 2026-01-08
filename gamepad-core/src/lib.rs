@@ -15,6 +15,7 @@
 //! - [`input`]: Input source trait ([`InputSource`])
 //! - [`output`]: Output sink trait ([`OutputSink`])
 //! - [`bridge`]: Orchestrates input-to-output flow ([`GamepadBridge`])
+//! - [`telemetry`]: Bidirectional telemetry support ([`TelemetrySink`], [`TelemetrySource`])
 //!
 //! # Protocol
 //!
@@ -67,6 +68,7 @@ extern crate std;
 pub mod bridge;
 pub mod input;
 pub mod output;
+pub mod telemetry;
 
 // Re-export all types and functions from gamepad-proto for convenience
 pub use gamepad_proto::{
@@ -99,3 +101,7 @@ pub use gamepad_proto::{
 pub use bridge::{BridgeError, GamepadBridge};
 pub use input::{InputError, InputSource};
 pub use output::{OutputError, OutputSink};
+pub use telemetry::{
+    MockTelemetrySource, NullTelemetrySink, TelemetryData, TelemetryError, TelemetrySink,
+    TelemetrySource,
+};

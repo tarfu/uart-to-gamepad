@@ -227,6 +227,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
+name = "crsf-proto"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "gamepad-core",
+ "heapless 0.8.0",
+ "uf-crsf",
+]
+
+[[package]]
 name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -884,6 +894,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5a2d376baa530d1238d133232d15e239abad80d05838b4b59354e5268af431f"
 
 [[package]]
+name = "libm"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
+
+[[package]]
 name = "litrs"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -924,6 +940,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata",
+]
+
+[[package]]
+name = "mavlink-proto"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "gamepad-core",
+ "heapless 0.8.0",
 ]
 
 [[package]]
@@ -1600,11 +1625,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
-name = "uart-to-gamepad"
+name = "uart-to-gamepad-rp2040"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
+ "crsf-proto",
  "defmt",
  "defmt-rtt",
  "embassy-embedded-hal",
@@ -1619,13 +1645,27 @@ dependencies = [
  "fixed",
  "fixed-macro",
  "gamepad-core",
+ "gamepad-proto",
  "heapless 0.9.2",
  "log",
+ "mavlink-proto",
  "panic-probe",
  "panic-reset",
  "portable-atomic",
  "static_cell",
  "usbd-hid",
+]
+
+[[package]]
+name = "uf-crsf"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49ae31a1b3bccef75ae3ea09e20fa5b518895ca0762175494297d14bca78302d"
+dependencies = [
+ "crc",
+ "heapless 0.9.2",
+ "libm",
+ "num_enum",
 ]
 
 [[package]]

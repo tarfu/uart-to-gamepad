@@ -14,9 +14,16 @@ use embassy_sync::signal::Signal;
 use embassy_usb::class::hid::State;
 use embassy_usb::{Builder, Config as UsbConfig};
 use static_cell::StaticCell;
-use uart_to_gamepad::{
-    configure_usb_hid, GamepadState, InputSource, OutputSink, UartInputSource, UsbHidOutput,
-};
+use uart_to_gamepad_rp2040::{configure_usb_hid, GamepadState, InputSource, OutputSink, UsbHidOutput};
+
+#[cfg(feature = "proto-gamepad")]
+use uart_to_gamepad_rp2040::UartInputSource;
+
+#[cfg(feature = "proto-crsf")]
+use uart_to_gamepad_rp2040::CrsfInputSource;
+
+#[cfg(feature = "proto-mavlink")]
+use uart_to_gamepad_rp2040::MavlinkInputSource;
 
 #[cfg(feature = "dev-panic")]
 use panic_probe as _;
@@ -52,8 +59,16 @@ async fn main(spawner: Spawner) {
     let signal = STATE_SIGNAL.init(Signal::new());
 
     // --- UART Setup ---
+    // Baud rate depends on protocol
+    #[cfg(feature = "proto-gamepad")]
+    const UART_BAUDRATE: u32 = 115_200;
+    #[cfg(feature = "proto-crsf")]
+    const UART_BAUDRATE: u32 = 420_000;
+    #[cfg(feature = "proto-mavlink")]
+    const UART_BAUDRATE: u32 = 115_200;
+
     let mut uart_config = UartConfig::default();
-    uart_config.baudrate = 115_200;
+    uart_config.baudrate = UART_BAUDRATE;
 
     let uart = Uart::new(
         p.UART1,
@@ -64,8 +79,23 @@ async fn main(spawner: Spawner) {
         p.DMA_CH1,
         uart_config,
     );
-    let (_tx, rx) = uart.split();
-    let uart_input = UartInputSource::new(rx);
+
+    // Create protocol-specific input source
+    #[cfg(feature = "proto-gamepad")]
+    let input_source = {
+        let (_tx, rx) = uart.split();
+        UartInputSource::new(rx)
+    };
+    #[cfg(feature = "proto-crsf")]
+    let input_source = {
+        let (_tx, rx) = uart.split();
+        CrsfInputSource::new(rx)
+    };
+    #[cfg(feature = "proto-mavlink")]
+    let input_source = {
+        let (_tx, rx) = uart.split();
+        MavlinkInputSource::new(rx)
+    };
 
     // --- USB Setup ---
     let usb_driver = Driver::new(p.USB, Irqs);
@@ -106,7 +136,7 @@ async fn main(spawner: Spawner) {
 
     // Spawn tasks (unwrap the SpawnToken, then spawn)
     spawner.spawn(usb_task(usb_device).unwrap());
-    spawner.spawn(input_task(uart_input, signal, led).unwrap());
+    spawner.spawn(input_task(input_source, signal, led).unwrap());
     spawner.spawn(output_task(usb_output, signal).unwrap());
 
     info!("UART-to-Gamepad initialized, waiting for data...");
@@ -119,6 +149,7 @@ async fn usb_task(mut device: embassy_usb::UsbDevice<'static, Driver<'static, US
 }
 
 /// Input task - reads from UART and signals the latest gamepad state.
+#[cfg(feature = "proto-gamepad")]
 #[embassy_executor::task]
 async fn input_task(
     mut input: UartInputSource<'static>,
@@ -136,6 +167,50 @@ async fn input_task(
                 // Signal neutral state on error to prevent stale inputs
                 signal.signal(GamepadState::neutral());
                 // Toggle LED to indicate error
+                led.toggle();
+            }
+        }
+    }
+}
+
+/// Input task for CRSF protocol - reads CRSF frames and signals gamepad state.
+#[cfg(feature = "proto-crsf")]
+#[embassy_executor::task]
+async fn input_task(
+    mut input: CrsfInputSource<'static>,
+    signal: &'static Signal<CriticalSectionRawMutex, GamepadState>,
+    mut led: Output<'static>,
+) {
+    loop {
+        match input.receive().await {
+            Ok(state) => {
+                signal.signal(state);
+            }
+            Err(e) => {
+                error!("CRSF input error: {:?}", e);
+                signal.signal(GamepadState::neutral());
+                led.toggle();
+            }
+        }
+    }
+}
+
+/// Input task for MAVLink protocol - reads MANUAL_CONTROL messages and signals gamepad state.
+#[cfg(feature = "proto-mavlink")]
+#[embassy_executor::task]
+async fn input_task(
+    mut input: MavlinkInputSource<'static>,
+    signal: &'static Signal<CriticalSectionRawMutex, GamepadState>,
+    mut led: Output<'static>,
+) {
+    loop {
+        match input.receive().await {
+            Ok(state) => {
+                signal.signal(state);
+            }
+            Err(e) => {
+                error!("MAVLink input error: {:?}", e);
+                signal.signal(GamepadState::neutral());
                 led.toggle();
             }
         }
