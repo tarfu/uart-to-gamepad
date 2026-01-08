@@ -17,6 +17,7 @@ heapless = ["dep:heapless"]
 embedded-io = ["dep:embedded-io"]
 
 [dependencies]
+crc = { version = "3.4", default-features = false }
 defmt = { version = "1", optional = true }
 heapless = { version = "0.8", optional = true }
 embedded-io = { version = "0.6", optional = true }

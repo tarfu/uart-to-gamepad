@@ -70,8 +70,10 @@ pub mod output;
 
 // Re-export all types and functions from gamepad-proto for convenience
 pub use gamepad_proto::{
+    // CRC-8 checksum
+    calculate_crc8,
+    Crc8Digest,
     // Parser
-    calculate_checksum,
     parse,
     parse_message,
     // Serialization

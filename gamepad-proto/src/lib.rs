@@ -19,7 +19,7 @@
 //!
 //! # Protocol Format
 //!
-//! The protocol uses ASCII text messages with XOR checksums.
+//! The protocol uses ASCII text messages with CRC-8/SMBUS checksums.
 //!
 //! ## Full State Message
 //!
@@ -32,7 +32,7 @@
 //! - `lx,ly` - Left stick X/Y as signed decimal i16 (-32768 to 32767)
 //! - `rx,ry` - Right stick X/Y as signed decimal i16
 //! - `lt,rt` - Triggers as unsigned decimal u8 (0-255)
-//! - `checksum` - 2 hex digits (XOR of payload bytes)
+//! - `checksum` - 2 hex digits (CRC-8/SMBUS of payload bytes)
 //!
 //! ## Incremental Update Message
 //!
@@ -112,6 +112,7 @@
 extern crate std;
 
 pub mod builder;
+pub mod crc;
 mod fmt;
 pub mod parser;
 pub mod serialize;
@@ -119,8 +120,7 @@ pub mod types;
 
 // Re-export types at crate root for convenience
 pub use builder::{serialize_full_state, FullStateBuilder, MessageBuilder, UpdateBuilder};
-pub use parser::{
-    calculate_checksum, parse, parse_message, ParseError, ParsedMessage, MAX_LINE_LENGTH,
-};
+pub use crc::{calculate_crc8, Crc8Digest};
+pub use parser::{parse, parse_message, ParseError, ParsedMessage, MAX_LINE_LENGTH};
 pub use serialize::{Serialize, SerializeError, MAX_FULL_STATE_SIZE, MAX_UPDATE_SIZE};
 pub use types::{AnalogStick, Buttons, GamepadFieldUpdate, GamepadState};

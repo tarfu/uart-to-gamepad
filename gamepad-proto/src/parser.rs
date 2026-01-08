@@ -4,6 +4,7 @@
 //! - Full state (G prefix): `G<buttons>:<lx>:<ly>:<rx>:<ry>:<lt>:<rt>*<checksum>\n`
 //! - Update (U prefix): `U<field>:<value>*<checksum>\n`
 
+use crate::crc::calculate_crc8;
 use crate::types::{AnalogStick, Buttons, GamepadFieldUpdate, GamepadState};
 
 /// Maximum line length for the protocol (including newline).
@@ -48,7 +49,7 @@ pub enum ParsedMessage {
 /// - `lx,ly` - Left stick X/Y as signed decimal i16
 /// - `rx,ry` - Right stick X/Y as signed decimal i16
 /// - `lt,rt` - Triggers as unsigned decimal u8 (0-255)
-/// - `checksum` - 2 hex digits (XOR of bytes between G and *)
+/// - `checksum` - 2 hex digits (CRC-8/SMBUS of bytes between G and *)
 /// - `\\n` - Line terminator (CR ignored if present)
 ///
 /// # Errors
@@ -191,13 +192,6 @@ fn parse_update(line: &[u8]) -> Result<GamepadFieldUpdate, ParseError> {
     })
 }
 
-/// Calculate XOR checksum of the payload bytes.
-#[inline]
-#[must_use]
-pub fn calculate_checksum(data: &[u8]) -> u8 {
-    data.iter().fold(0u8, |acc, &b| acc ^ b)
-}
-
 /// Strip trailing CR and/or LF from a line.
 #[inline]
 fn strip_line_ending(line: &[u8]) -> &[u8] {
@@ -232,7 +226,7 @@ fn extract_verified_payload(line: &[u8], min_len: usize) -> Result<&[u8], ParseE
 
     let payload = &line[1..checksum_pos];
     let checksum_str = &line[checksum_pos + 1..];
-    let expected_checksum = calculate_checksum(payload);
+    let expected_checksum = calculate_crc8(payload);
     let received_checksum = parse_hex_u8(checksum_str)?;
 
     if expected_checksum != received_checksum {
@@ -368,7 +362,7 @@ mod tests {
     #[test]
     fn test_parse_neutral() {
         let payload = b"0000:0:0:0:0:0:0";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("G0000:0:0:0:0:0:0*{:02X}\n", checksum);
         let state = parse(line.as_bytes()).unwrap();
         assert_eq!(state, GamepadState::neutral());
@@ -377,7 +371,7 @@ mod tests {
     #[test]
     fn test_parse_button_a() {
         let payload = b"0001:0:0:0:0:0:0";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("G0001:0:0:0:0:0:0*{:02X}\n", checksum);
         let state = parse(line.as_bytes()).unwrap();
         assert!(state.buttons.is_pressed(Buttons::A));
@@ -386,7 +380,7 @@ mod tests {
     #[test]
     fn test_parse_sticks() {
         let payload = b"0000:1000:-2000:3000:-4000:128:64";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("G0000:1000:-2000:3000:-4000:128:64*{:02X}\n", checksum);
         let state = parse(line.as_bytes()).unwrap();
         assert_eq!(state.left_stick.x, 1000);
@@ -415,7 +409,7 @@ mod tests {
     #[test]
     fn test_parse_update_buttons() {
         let payload = b"B:0003";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("UB:0003*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -427,7 +421,7 @@ mod tests {
     #[test]
     fn test_parse_update_left_stick_x() {
         let payload = b"LX:-500";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("ULX:-500*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -439,7 +433,7 @@ mod tests {
     #[test]
     fn test_parse_update_left_stick_y() {
         let payload = b"LY:1000";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("ULY:1000*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -451,7 +445,7 @@ mod tests {
     #[test]
     fn test_parse_update_right_stick_x() {
         let payload = b"RX:2000";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("URX:2000*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -463,7 +457,7 @@ mod tests {
     #[test]
     fn test_parse_update_right_stick_y() {
         let payload = b"RY:-100";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("URY:-100*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -475,7 +469,7 @@ mod tests {
     #[test]
     fn test_parse_update_left_trigger() {
         let payload = b"LT:128";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("ULT:128*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -487,7 +481,7 @@ mod tests {
     #[test]
     fn test_parse_update_right_trigger() {
         let payload = b"RT:255";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("URT:255*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -505,7 +499,7 @@ mod tests {
     #[test]
     fn test_parse_update_invalid_field() {
         let payload = b"XX:100";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("UXX:100*{:02X}\n", checksum);
         assert_eq!(parse_message(line.as_bytes()), Err(ParseError::Parse));
     }
@@ -513,7 +507,7 @@ mod tests {
     #[test]
     fn test_parse_message_dispatches_g() {
         let payload = b"0000:0:0:0:0:0:0";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("G0000:0:0:0:0:0:0*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(result, ParsedMessage::FullState(GamepadState::neutral()));
@@ -551,7 +545,7 @@ mod tests {
     #[test]
     fn test_parse_i16_max() {
         let payload = b"LX:32767";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("ULX:32767*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -563,7 +557,7 @@ mod tests {
     #[test]
     fn test_parse_i16_min() {
         let payload = b"LX:-32768";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("ULX:-32768*{:02X}\n", checksum);
         let result = parse_message(line.as_bytes()).unwrap();
         assert_eq!(
@@ -575,7 +569,7 @@ mod tests {
     #[test]
     fn test_parse_i16_overflow() {
         let payload = b"LX:32768";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("ULX:32768*{:02X}\n", checksum);
         assert_eq!(parse_message(line.as_bytes()), Err(ParseError::Parse));
     }
@@ -583,7 +577,7 @@ mod tests {
     #[test]
     fn test_parse_i16_underflow() {
         let payload = b"LX:-32769";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("ULX:-32769*{:02X}\n", checksum);
         assert_eq!(parse_message(line.as_bytes()), Err(ParseError::Parse));
     }
@@ -592,7 +586,7 @@ mod tests {
     fn test_parse_cr_only_line_ending() {
         // CR-only line ending should be stripped
         let payload = b"0000:0:0:0:0:0:0";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("G0000:0:0:0:0:0:0*{:02X}\r", checksum);
         let state = parse(line.as_bytes()).unwrap();
         assert_eq!(state, GamepadState::neutral());
@@ -602,7 +596,7 @@ mod tests {
     fn test_parse_extra_parts_rejected() {
         // Message with extra colon-separated part should fail
         let payload = b"0000:0:0:0:0:0:0:99";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("G0000:0:0:0:0:0:0:99*{:02X}\n", checksum);
         assert_eq!(parse(line.as_bytes()), Err(ParseError::Parse));
     }
@@ -611,7 +605,7 @@ mod tests {
     fn test_parse_missing_parts_rejected() {
         // Message with missing parts should fail
         let payload = b"0000:0:0:0:0:0";
-        let checksum = calculate_checksum(payload);
+        let checksum = calculate_crc8(payload);
         let line = format!("G0000:0:0:0:0:0*{:02X}\n", checksum);
         assert_eq!(parse(line.as_bytes()), Err(ParseError::Parse));
     }

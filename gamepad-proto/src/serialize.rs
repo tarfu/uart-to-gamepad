@@ -30,9 +30,97 @@
 //! assert!(buf[..len].starts_with(b"G0000:0:0:0:0:0:0*"));
 //! ```
 
+use crate::crc::Crc8Digest;
 use crate::fmt::{write_hex_u16, write_hex_u8, write_i16, write_u8};
-use crate::parser::calculate_checksum;
 use crate::types::{GamepadFieldUpdate, GamepadState};
+
+/// Helper for buffer management with incremental CRC-8 checksum calculation.
+///
+/// Writes directly to the output buffer while accumulating the CRC-8 checksum,
+/// eliminating the need for intermediate payload buffers.
+struct SerializeBuf<'a> {
+    buf: &'a mut [u8],
+    pos: usize,
+    crc: Crc8Digest,
+}
+
+impl<'a> SerializeBuf<'a> {
+    /// Create a new serialization buffer.
+    #[inline]
+    fn new(buf: &'a mut [u8]) -> Self {
+        Self {
+            buf,
+            pos: 0,
+            crc: Crc8Digest::new(),
+        }
+    }
+
+    /// Write a byte without checksumming (for prefix, separator, newline).
+    #[inline]
+    fn write_raw(&mut self, byte: u8) {
+        self.buf[self.pos] = byte;
+        self.pos += 1;
+    }
+
+    /// Write a byte and accumulate into CRC-8 checksum.
+    #[inline]
+    fn write(&mut self, byte: u8) {
+        self.buf[self.pos] = byte;
+        self.crc.update(byte);
+        self.pos += 1;
+    }
+
+    /// Write multiple bytes and accumulate into CRC-8 checksum.
+    #[inline]
+    fn write_slice(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.write(b);
+        }
+    }
+
+    /// Write hex u16 (4 bytes) with checksum.
+    #[inline]
+    fn write_hex_u16(&mut self, value: u16) {
+        let mut tmp = [0u8; 4];
+        write_hex_u16(&mut tmp, value);
+        self.write_slice(&tmp);
+    }
+
+    /// Write i16 decimal with checksum.
+    #[inline]
+    fn write_i16(&mut self, value: i16) {
+        let mut tmp = [0u8; 6];
+        let len = write_i16(&mut tmp, value);
+        self.write_slice(&tmp[..len]);
+    }
+
+    /// Write u8 decimal with checksum.
+    #[inline]
+    fn write_u8(&mut self, value: u8) {
+        let mut tmp = [0u8; 3];
+        let len = write_u8(&mut tmp, value);
+        self.write_slice(&tmp[..len]);
+    }
+
+    /// Finalize by writing CRC-8 checksum and newline.
+    #[inline]
+    fn finalize(self) -> usize {
+        let checksum = self.crc.finalize();
+        let mut pos = self.pos;
+
+        // Write directly to buffer since we've consumed the CRC digest
+        self.buf[pos] = b'*';
+        pos += 1;
+
+        // Write checksum as 2 hex digits
+        pos += write_hex_u8(&mut self.buf[pos..], checksum);
+
+        self.buf[pos] = b'\n';
+        pos += 1;
+
+        pos
+    }
+}
 
 /// Maximum size of a serialized full state message.
 ///
@@ -133,76 +221,28 @@ impl Serialize for GamepadState {
             return Err(SerializeError::BufferTooSmall);
         }
 
-        // Build payload first to calculate checksum
-        let mut payload_buf = [0u8; MAX_FULL_STATE_SIZE];
-        let mut pos = 0;
+        let mut sb = SerializeBuf::new(buf);
 
-        // Buttons (4 hex digits)
-        pos += write_hex_u16(&mut payload_buf[pos..], self.buttons.raw());
+        // Prefix (not checksummed)
+        sb.write_raw(b'G');
 
-        // Colon separator
-        payload_buf[pos] = b':';
-        pos += 1;
+        // Payload (checksummed)
+        sb.write_hex_u16(self.buttons.raw());
+        sb.write(b':');
+        sb.write_i16(self.left_stick.x);
+        sb.write(b':');
+        sb.write_i16(self.left_stick.y);
+        sb.write(b':');
+        sb.write_i16(self.right_stick.x);
+        sb.write(b':');
+        sb.write_i16(self.right_stick.y);
+        sb.write(b':');
+        sb.write_u8(self.left_trigger);
+        sb.write(b':');
+        sb.write_u8(self.right_trigger);
 
-        // Left stick X
-        pos += write_i16(&mut payload_buf[pos..], self.left_stick.x);
-
-        payload_buf[pos] = b':';
-        pos += 1;
-
-        // Left stick Y
-        pos += write_i16(&mut payload_buf[pos..], self.left_stick.y);
-
-        payload_buf[pos] = b':';
-        pos += 1;
-
-        // Right stick X
-        pos += write_i16(&mut payload_buf[pos..], self.right_stick.x);
-
-        payload_buf[pos] = b':';
-        pos += 1;
-
-        // Right stick Y
-        pos += write_i16(&mut payload_buf[pos..], self.right_stick.y);
-
-        payload_buf[pos] = b':';
-        pos += 1;
-
-        // Left trigger
-        pos += write_u8(&mut payload_buf[pos..], self.left_trigger);
-
-        payload_buf[pos] = b':';
-        pos += 1;
-
-        // Right trigger
-        pos += write_u8(&mut payload_buf[pos..], self.right_trigger);
-
-        let payload_len = pos;
-        let checksum = calculate_checksum(&payload_buf[..payload_len]);
-
-        // Now write the complete message
-        let mut out_pos = 0;
-
-        // Prefix
-        buf[out_pos] = b'G';
-        out_pos += 1;
-
-        // Payload
-        buf[out_pos..out_pos + payload_len].copy_from_slice(&payload_buf[..payload_len]);
-        out_pos += payload_len;
-
-        // Checksum separator
-        buf[out_pos] = b'*';
-        out_pos += 1;
-
-        // Checksum (2 hex digits)
-        out_pos += write_hex_u8(&mut buf[out_pos..], checksum);
-
-        // Line ending
-        buf[out_pos] = b'\n';
-        out_pos += 1;
-
-        Ok(out_pos)
+        // Finalize with checksum and newline
+        Ok(sb.finalize())
     }
 
     fn serialize_fmt<W: core::fmt::Write>(&self, writer: &mut W) -> Result<(), SerializeError> {
@@ -230,88 +270,45 @@ impl Serialize for GamepadFieldUpdate {
             return Err(SerializeError::BufferTooSmall);
         }
 
-        // Build payload first to calculate checksum
-        let mut payload_buf = [0u8; MAX_UPDATE_SIZE];
-        let mut pos = 0;
+        let mut sb = SerializeBuf::new(buf);
 
+        // Prefix (not checksummed)
+        sb.write_raw(b'U');
+
+        // Field:value (checksummed)
         match self {
             Self::Buttons(b) => {
-                payload_buf[pos] = b'B';
-                pos += 1;
-                payload_buf[pos] = b':';
-                pos += 1;
-                pos += write_hex_u16(&mut payload_buf[pos..], b.raw());
+                sb.write_slice(b"B:");
+                sb.write_hex_u16(b.raw());
             }
             Self::LeftStickX(v) => {
-                payload_buf[pos..pos + 2].copy_from_slice(b"LX");
-                pos += 2;
-                payload_buf[pos] = b':';
-                pos += 1;
-                pos += write_i16(&mut payload_buf[pos..], *v);
+                sb.write_slice(b"LX:");
+                sb.write_i16(*v);
             }
             Self::LeftStickY(v) => {
-                payload_buf[pos..pos + 2].copy_from_slice(b"LY");
-                pos += 2;
-                payload_buf[pos] = b':';
-                pos += 1;
-                pos += write_i16(&mut payload_buf[pos..], *v);
+                sb.write_slice(b"LY:");
+                sb.write_i16(*v);
             }
             Self::RightStickX(v) => {
-                payload_buf[pos..pos + 2].copy_from_slice(b"RX");
-                pos += 2;
-                payload_buf[pos] = b':';
-                pos += 1;
-                pos += write_i16(&mut payload_buf[pos..], *v);
+                sb.write_slice(b"RX:");
+                sb.write_i16(*v);
             }
             Self::RightStickY(v) => {
-                payload_buf[pos..pos + 2].copy_from_slice(b"RY");
-                pos += 2;
-                payload_buf[pos] = b':';
-                pos += 1;
-                pos += write_i16(&mut payload_buf[pos..], *v);
+                sb.write_slice(b"RY:");
+                sb.write_i16(*v);
             }
             Self::LeftTrigger(v) => {
-                payload_buf[pos..pos + 2].copy_from_slice(b"LT");
-                pos += 2;
-                payload_buf[pos] = b':';
-                pos += 1;
-                pos += write_u8(&mut payload_buf[pos..], *v);
+                sb.write_slice(b"LT:");
+                sb.write_u8(*v);
             }
             Self::RightTrigger(v) => {
-                payload_buf[pos..pos + 2].copy_from_slice(b"RT");
-                pos += 2;
-                payload_buf[pos] = b':';
-                pos += 1;
-                pos += write_u8(&mut payload_buf[pos..], *v);
+                sb.write_slice(b"RT:");
+                sb.write_u8(*v);
             }
         }
 
-        let payload_len = pos;
-        let checksum = calculate_checksum(&payload_buf[..payload_len]);
-
-        // Now write the complete message
-        let mut out_pos = 0;
-
-        // Prefix
-        buf[out_pos] = b'U';
-        out_pos += 1;
-
-        // Payload
-        buf[out_pos..out_pos + payload_len].copy_from_slice(&payload_buf[..payload_len]);
-        out_pos += payload_len;
-
-        // Checksum separator
-        buf[out_pos] = b'*';
-        out_pos += 1;
-
-        // Checksum (2 hex digits)
-        out_pos += write_hex_u8(&mut buf[out_pos..], checksum);
-
-        // Line ending
-        buf[out_pos] = b'\n';
-        out_pos += 1;
-
-        Ok(out_pos)
+        // Finalize with checksum and newline
+        Ok(sb.finalize())
     }
 
     fn serialize_fmt<W: core::fmt::Write>(&self, writer: &mut W) -> Result<(), SerializeError> {
